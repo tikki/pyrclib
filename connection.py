@@ -54,9 +54,12 @@ class SocketConnection(object):
 		sock = self.__socket
 		sockList = [sock]
 		readable, writable, error = select(sockList, sockList, [], 5)
+		if sock in readable:
+			chunk = sock.recv(4096)
+			if len(chunk) == 0: # connection was closed by other side
+				self.disconnect()
+				return
+			self.__recvbuf += chunk
 		if sock in writable:
 			sent = sock.send(self.__sendbuf)
 			self.__sendbuf = self.__sendbuf[sent:]
-		if sock in readable:
-			chunk = sock.recv(4096)
-			self.__recvbuf += chunk
