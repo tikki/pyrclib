@@ -66,6 +66,8 @@ class IRCClient(object):
 				irc.connect(server, port)
 				irc.run() # hand over control to the irc library
 			except KeyboardInterrupt:
+				for logger, send, recv in self.loggers:
+					logger.flush()
 				raise
 			except Exception as err:
 				print(err, 'Reconnecting in 5 seconds.')
