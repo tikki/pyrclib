@@ -159,7 +159,7 @@ class Message(object):
 			try:
 				middle, trailing = msgString.split(' :', 1)
 			except ValueError:
-				pass
+				middle = msgString
 			if middle:
 				params = middle.split(' ')
 			if trailing is not None:
