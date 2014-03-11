@@ -60,6 +60,6 @@ class SocketConnection(object):
 				self.disconnect()
 				return
 			self.__recvbuf += chunk
-		if sock in writable:
+		if self.__sendbuf and sock in writable:
 			sent = sock.send(self.__sendbuf)
 			self.__sendbuf = self.__sendbuf[sent:]
