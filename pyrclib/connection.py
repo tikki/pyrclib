@@ -1,10 +1,12 @@
 import socket
+import ssl
 from select import select
 
 class SocketConnection(object):
-	def __init__(self, host, port):
+	def __init__(self, host, port, useSsl):
 		self.host = host
 		self.port = port
+		self.useSsl = useSsl
 		self.__sendbuf = ''
 		self.__recvbuf = ''
 		self.__socket = self._getSocket()
@@ -17,6 +19,8 @@ class SocketConnection(object):
 				s = None
 				continue
 			try:
+				if self.useSsl:
+					s = ssl.wrap_socket(s, ssl_version = ssl.PROTOCOL_TLSv1)
 				s.connect(sa)
 			except socket.error as msg:
 				s.close()

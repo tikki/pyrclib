@@ -21,8 +21,8 @@ class IRCClient(object):
 	def addNicks(self, *names):
 		for name in names:
 			self.nicknames.append(name)
-	def addServer(self, host, port):
-		self.servers.append((host, port))
+	def addServer(self, host, port, useSsl):
+		self.servers.append((host, port, useSsl))
 	def addChannel(self, name, passwd = None):
 		self.channels.append((name, passwd))
 	def addLogger(self, logger, send = True, recv = True):
@@ -59,11 +59,11 @@ class IRCClient(object):
 		while self.isRunning:
 			# get next server & port
 			self.serverIndex = (self.serverIndex + 1) % len(self.servers)
-			server, port = self.servers[self.serverIndex]
+			server, port, useSsl = self.servers[self.serverIndex]
 			# reset connected state
 			self.isConnected = False
 			try:
-				irc.connect(server, port)
+				irc.connect(server, port, useSsl)
 				irc.run() # hand over control to the irc library
 			except KeyboardInterrupt:
 				for logger, send, recv in self.loggers:

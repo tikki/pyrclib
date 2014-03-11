@@ -18,6 +18,7 @@ def main():
 	try:
 		username, realname = conf['username'][0], conf['realname'][0]
 		nicks, channels, servers = conf['nick'], conf['channel'], conf['server']
+		useSsl = 'use ssl' in conf
 		logPath = conf['log path'][0]
 		isSilenced = 'silenced' in conf or 'quiet' in conf
 	except KeyError as err:
@@ -32,7 +33,8 @@ def main():
 			else:
 				client.addChannel(channel)
 		for server in servers:
-			client.addServer(*server.split(':')) # split server string into host and port
+			host, port = server.split(':')
+			client.addServer(host, port, useSsl) # split server string into host and port
 		# create and add loggers
 		logToFile = AutoNamedIRCLogger(logPath, 2**7)
 		client.addLogger(logToFile)

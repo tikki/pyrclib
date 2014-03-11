@@ -10,8 +10,8 @@ class IRCConnectionError(Exception): pass
 
 class IRCConnection(SocketConnection):
 	EOL = '\r\n'
-	def __init__(self, host, port, delegate):
-		super(IRCConnection, self).__init__(host, port)
+	def __init__(self, host, port, delegate, useSsl):
+		super(IRCConnection, self).__init__(host, port, useSsl)
 		self.delegate = delegate
 	def send(self, msgString):
 		if msgString:
@@ -51,8 +51,8 @@ class IRCBase(EventEmitter, TimerManager):
 	def sendRaw(self, msgString):
 		self.emitEvent('send', self, Message(msgString))
 		self.__ircConnection.send(msgString)
-	def connect(self, host, port):
-		self.__ircConnection = IRCConnection(host, port, self)
+	def connect(self, host, port, useSsl):
+		self.__ircConnection = IRCConnection(host, port, self, useSsl)
 		self.nick()
 		self.sendRaw('USER %s * * :%s' % (self.__user, self.__real))
 	# IRC commands
@@ -105,8 +105,8 @@ class IRC(IRCBase):
 	def receivedMessage(self, msg):
 		super(IRC, self).receivedMessage(msg)
 		self.__dataReceivedTime = now()
-	def connect(self, host, port):
-		super(IRC, self).connect(host, port)
+	def connect(self, host, port, useSsl):
+		super(IRC, self).connect(host, port, useSsl)
 		self.__dataReceivedTime = now()
 	# IRC commands
 	def ping(self):
