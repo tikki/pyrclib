@@ -1,26 +1,30 @@
 from time import sleep
 from time import time as now
-from connection import SocketConnection
-from events import EventEmitter
-from timer import TimerManager
+from .connection import SocketConnection
+from .events import EventEmitter
+from .timer import TimerManager
+from .channel import Channel
+from .message import MessageBase as Message
+from .log import logException
 
 ## irc rfc: https://tools.ietf.org/html/rfc1459
 
 class IRCConnectionError(Exception): pass
 
 class IRCConnection(SocketConnection):
-	EOL = '\r\n'
-	def __init__(self, host, port, delegate, useSsl):
-		super(IRCConnection, self).__init__(host, port, useSsl)
+	EOL = b'\r\n'
+	def __init__(self, host: str, port: int, delegate, useSsl: bool):
+		super().__init__(host, port, useSsl)
 		self.delegate = delegate
-	def send(self, msgString):
-		if msgString:
-			msgString += self.EOL
-		return super(IRCConnection, self).send(msgString)
+	def send(self, msgString: str):
+		msgData = msgString.encode('utf-8')
+		if msgData:
+			msgData += self.EOL
+		return super().send(msgData)
 	def tick(self):
 		if not self.isConnected():
 			raise IRCConnectionError('Connection closed by remote.')
-		super(IRCConnection, self).tick()
+		super().tick()
 		# parse received data into messages
 		buf = self.peek()
 		msgsLen = buf.rfind(self.EOL)
@@ -28,8 +32,13 @@ class IRCConnection(SocketConnection):
 			self.discard(msgsLen + len(self.EOL))
 			msgs = buf[:msgsLen].split(self.EOL)
 			# send messages to delegate
-			for msg in msgs:
-				self.delegate.receivedMessage(Message(msg))
+			for msgData in msgs:
+				try:
+					msg = Message(msgData)
+				except Exception as e:
+					logException(e)
+				else:
+					self.delegate.receivedMessage(msg)
 
 class IRCBase(EventEmitter, TimerManager):
 	"""Implements the very basic IRC functionality.
@@ -38,39 +47,39 @@ class IRCBase(EventEmitter, TimerManager):
 	If you sub-class IRCBase and overwrite `tick` be sure to call TimerManager.tick
 	or IRCBase.tick (which is the same), otherwise the timers won't work!
 	"""
-	def __init__(self, nick, user, real):
-		super(IRCBase, self).__init__()
+	def __init__(self, nick: str, user: str, real: str):
+		super().__init__()
 		self.__ircConnection = None
 		self.__nick = nick
 		self.__user = user
 		self.__real = real
 		self.isRunning = False
 	# IRCConnection delegate
-	def receivedMessage(self, msg):
+	def receivedMessage(self, msg: Message):
 		self.emitEvent('recv', self, msg)
-	def sendRaw(self, msgString):
+	def sendRaw(self, msgString: str):
 		self.emitEvent('send', self, Message(msgString))
 		self.__ircConnection.send(msgString)
-	def connect(self, host, port, useSsl):
+	def connect(self, host: str, port: int, useSsl: bool):
 		self.__ircConnection = IRCConnection(host, port, self, useSsl)
 		self.nick()
 		self.sendRaw('USER %s * * :%s' % (self.__user, self.__real))
 	# IRC commands
-	def msg(self, receiver, text):
+	def msg(self, receiver: str, text: str):
 		self.sendRaw('PRIVMSG %s :%s' % (receiver, text))
 	def ping(self):
 		self.sendRaw('PING %i' % now())
-	def join(self, channel, key = None):
+	def join(self, channel: str, key: str = None) -> Channel:
 		key = ' ' + key if key else ''
 		self.sendRaw('JOIN ' + channel + key)
 		return Channel(self, channel)
-	def nick(self, nick = None):
+	def nick(self, nick: str = None):
 		if nick is None:
 			nick = self.__nick
 		else:
 			self.__nick = nick
 		self.sendRaw('NICK ' + nick)
-	def quit(self, message = None):
+	def quit(self, message: str = None):
 		if message is not None:
 			self.sendRaw('QUIT :' + message)
 		else:
@@ -90,31 +99,31 @@ class IRCBase(EventEmitter, TimerManager):
 
 class IRC(IRCBase):
 	"""IRC is the main pyrclib class. It adds some essential automation to the IRCBase class."""
-	def __init__(self, nick, user, real):
-		super(IRC, self).__init__(nick, user, real)
+	def __init__(self, nick: str, user: str, real: str):
+		super().__init__(nick, user, real)
 		self.addEventHandler('recv', IRC.__pingHandler)
 		self.__dataReceivedTime = 0 # timestamp of the last time we received some data
 		self.__pingSentTime = 0 # timestamp of the last time a ping was sent
 	# 'built-in'/default handlers
 	@staticmethod
-	def __pingHandler(irc, msg):
+	def __pingHandler(irc, msg: Message):
 		if msg.command == 'PING':
 			irc.sendRaw(msg.raw.replace('PING', 'PONG'))
 			# return True
 	# IRCConnection delegate
-	def receivedMessage(self, msg):
-		super(IRC, self).receivedMessage(msg)
+	def receivedMessage(self, msg: Message):
+		super().receivedMessage(msg)
 		self.__dataReceivedTime = now()
-	def connect(self, host, port, useSsl):
-		super(IRC, self).connect(host, port, useSsl)
+	def connect(self, host: str, port: int, useSsl: bool):
+		super().connect(host, port, useSsl)
 		self.__dataReceivedTime = now()
 	# IRC commands
 	def ping(self):
-		super(IRC, self).ping()
+		super().ping()
 		self.__pingSentTime = now()
 	#
 	def tick(self):
-		super(IRC, self).tick() # will call IRCBase.tick which is TimerManager.tick
+		super().tick() # will call IRCBase.tick which is TimerManager.tick
 		# check if the connection is still alive
 		_now = now()
 		lastReceivedDelta = _now - self.__dataReceivedTime
@@ -125,60 +134,3 @@ class IRC(IRCBase):
 				lastPingDelta = _now - self.__pingSentTime
 				if lastPingDelta >= 120:
 					raise IRCConnectionError('Connection timed out.')
-
-class Message(object):
-	__slots__ = 'prefix', 'command', 'params', 'raw'
-	def __init__(self, msgString = None):
-		self.prefix = ''
-		self.command = ''
-		self.params = []
-		self.raw = ''
-		if msgString:
-			self.parse(msgString)
-	def __str__(self):
-		return self.raw
-	def parse(self, msgString):
-		prefix, command, params, raw = '', '', [], msgString
-		# check for prefix
-		if msgString.startswith(':'):
-			try:
-				prefix, msgString = msgString.split(' ', 1)
-			except ValueError as error:
-				prefix, msgString = msgString, ''
-			prefix = prefix[1:] # remove leading ':'
-		# extract command
-		try:
-			command, msgString = msgString.split(' ', 1)
-		except ValueError:
-			command, msgString = msgString, ''
-		# parse params
-		if msgString.startswith(':'): # only one parameter (the trailing one)
-			params = [msgString[1:]]
-		else:
-			middle, trailing = None, None
-			try:
-				middle, trailing = msgString.split(' :', 1)
-			except ValueError:
-				middle = msgString
-			if middle:
-				params = middle.split(' ')
-			if trailing is not None:
-				params.append(trailing)
-		# done.
-		self.prefix, self.command, self.params, self.raw = prefix, command, params, raw
-
-class Channel(EventEmitter):
-	def __init__(self, irc, channel):
-		super(Channel, self).__init__()
-		self.irc = irc
-		self.name = channel
-		irc.addEventHandler('recv', self.__onJoin)
-		# self.users = []
-		self.__joined = False
-	def __onJoin(self, irc, msg):
-		if msg.command == '366' or msg.command == 'RPL_ENDOFNAMES': # on successful join, a server sends a list of names.
-			self.__joined = True
-			self.emitEvent('join', self)
-	def msg(self, text):
-		if self.__joined:
-			self.irc.msg(self.name, text)

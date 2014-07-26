@@ -2,14 +2,14 @@ import time
 
 # Basic Loggers
 
-class Logger(object):
+class Logger:
 	"""A buffered logger"""
-	def __init__(self, pathOrWritable, maxBufferLines = 2**10):
+	def __init__(self, pathOrWritable, maxBufferLines: int = 2**10):
 		"""
 		pathOrWritable: path to a file to append to or a writable file-like object (like sys.stdout)
 		maxBufferLines: number of lines the buffer can hold before automatically flushing, set to 0 for immediate flushing
 		"""
-		super(Logger, self).__init__()
+		super().__init__()
 		self._out = pathOrWritable
 		self._isWritable = hasattr(pathOrWritable, 'write')
 		self._buf = []
@@ -24,7 +24,7 @@ class Logger(object):
 			# if we opened it, we have to close it.
 			if not self._isWritable:
 				fo.close()
-	def log(self, s):
+	def log(self, s: str):
 		"""log a string"""
 		self._buf.append(s)
 		# automatically flush every X lines
@@ -35,13 +35,13 @@ class AutoNamedLogger(Logger):
 	"""A logger that logs to file, automatically named using the supplied basename and current date."""
 	def __init__(self, basename, maxBufferLines = None):
 		if maxBufferLines is None:
-			super(AutoNamedLogger, self).__init__(None)
+			super().__init__(None)
 		else:
-			super(AutoNamedLogger, self).__init__(None, maxBufferLines)
+			super().__init__(None, maxBufferLines)
 		self.basename = basename
 	def flush(self):
 		self._out = '%s-%s.txt' % (self.basename, time.strftime('%Y-%m-%d'))
-		super(AutoNamedLogger, self).flush()
+		super().flush()
 
 # IRC Loggers
 
@@ -50,12 +50,12 @@ class IRCLoggerBase(Logger):
 
 	You shouldn't instantiate this class directly. Use derived classes instead."""
 	def log(self, irc, msg):
-		super(IRCLogger, self).log(msg.raw)
+		super().log(msg.raw)
 	def __call__(self, irc, msg):
 		self.log(irc, msg)
 
 class AutoFlushIRCLoggerMixin(IRCLoggerBase):
-	"""A base class mixin that flushes an IRC logger every 30 seconds.
+	"""A base class mixin that flushes an IRC logger every few seconds.
 	
 	You shouldn't instantiate this class directly. Use it together with another IRCLogger derived class as sub-class.
 	When used with another class as sub-class, put this one first.
@@ -65,16 +65,17 @@ class AutoFlushIRCLoggerMixin(IRCLoggerBase):
 	flushTime = 60 # this logger will automatically flush every X seconds
 	@staticmethod
 	def autoFlush(irc):
-		for logger in AutoFlushIRCLoggerMixin._loggers:
+		cls = AutoFlushIRCLoggerMixin
+		for logger in cls._loggers:
 			logger.flush()
-		irc.callIn(AutoFlushIRCLoggerMixin.flushTime * 1000, AutoFlushIRCLoggerMixin.autoFlush, irc)
+		irc.callIn(cls.flushTime * 1000, cls.autoFlush, irc)
 	def log(self, irc, msg):
 		# add to auto-flush list and check if we need to start the auto-flush callback loop
 		isFirstLogger = not bool(self._loggers)
 		self._loggers.add(self)
 		if isFirstLogger:
 			self.autoFlush(irc)
-		super(AutoFlushIRCLoggerMixin, self).log(irc, msg)
+		super().log(irc, msg)
 
 class RawIRCLogger(IRCLoggerBase):
 	"""Log all IRC messages in their raw form with prepended unix timestamp."""
@@ -87,19 +88,14 @@ class PrettyIRCLogger(IRCLoggerBase):
 
 	Logs messages, join, part, and quit."""
 	@staticmethod
-	def _clean(s):
-		"""decode a string and remove control characters"""
-		for codec in 'utf-8', 'iso-8859-15', 'shift_jis', 'latin-1':
-			try:
-				s = s.decode(codec)
-				break
-			except:
-				pass
-		else:
-			raise Exception('Could not decode message text.')
+	def _clean(s: str) -> str:
+		"""Return a string without control characters."""
 		return ''.join(c for c in s if ord(c) >= 32)
 	@staticmethod
-	def _parseSender(sender):
+	def _unicodeEscaped(s: str) -> str:
+		return s.encode('unicode-escape').decode('utf-8')
+	@staticmethod
+	def _parseSender(sender: str):
 		"""return the segments of a sender of format nick!user@host"""
 		nick, user = sender.split('!', 1)
 		user, host = user.split('@', 1)
@@ -122,9 +118,9 @@ class PrettyIRCLogger(IRCLoggerBase):
 				elif msg.command == 'QUIT':
 					formattedMsg = '%s (%s@%s) quit. (%s)' % (nick, user, host, channel) # channel is the quit message
 		except Exception as err:
-			print('Message parsing error. `%s`, %s'.encode('unicode-escape') % (msg.raw, err))
+			print(self._unicodeEscaped('Message parsing error. `{}`, {}'.format(msg.raw, err)))
 		if formattedMsg:
 			# add timestamp
 			timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
 			formattedMsg = '[%s] %s' % (timestamp, formattedMsg)
-			super(IRCLoggerBase, self).log(formattedMsg.encode('unicode-escape')) # skip IRCLoggerBase.log
+			super(IRCLoggerBase, self).log(self._unicodeEscaped(formattedMsg)) # skip IRCLoggerBase.log

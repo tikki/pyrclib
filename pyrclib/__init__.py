@@ -1,3 +1,3 @@
-import irc
-import client
-import logger
+from . import irc
+from . import client
+from . import logger

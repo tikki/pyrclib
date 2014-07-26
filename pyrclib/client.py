@@ -1,9 +1,10 @@
-from irc import IRC
+from .irc import IRC
 from time import sleep
+import traceback
 
-class IRCClient(object):
+class IRCClient:
 	def __init__(self, nicknames = None, username = None, realname = None, servers = None, channels = None):
-		super(IRCClient, self).__init__()
+		super().__init__()
 		# config
 		self.nicknames = list(nicknames) if nicknames is not None else []
 		self.username = username
@@ -11,12 +12,14 @@ class IRCClient(object):
 		self.servers = list(servers) if servers is not None else []
 		self.channels = list(channels) if channels is not None else []
 		self.loggers = []
-		self.nickIndex = 0
-		self.serverIndex = -1
 		# state
 		self.isRunning = False
 		self.isConnected = False
 		self.joinedChannels = []
+		self.irc = None # reference to the IRC instance
+		# private state
+		self.__nickIndex = 0
+		self.__serverIndex = -1
 	# accessors
 	def addNicks(self, *names):
 		for name in names:
@@ -41,12 +44,12 @@ class IRCClient(object):
 	def nickAlreadyInUseHandler(self, irc, msg):
 		"""`nickname already in use` error handler"""
 		if msg.command in ('433', 'ERR_NICKNAMEINUSE'):
-			self.nickIndex = (self.nickIndex + 1) % len(self.nicknames)
-			irc.nick(self.nicknames[self.nickIndex])
+			self.__nickIndex = (self.__nickIndex + 1) % len(self.nicknames)
+			irc.nick(self.nicknames[self.__nickIndex])
 			return True
 	# 
 	def run(self):
-		irc = IRC(self.nicknames[0], self.username, self.realname)
+		self.irc = irc = IRC(self.nicknames[0], self.username, self.realname)
 		# add own handlers first
 		irc.addEventHandler('recv', self.nickAlreadyInUseHandler)
 		irc.addEventHandler('recv', self.successfullyConnectedHandler)
@@ -58,8 +61,8 @@ class IRCClient(object):
 		self.isRunning = True
 		while self.isRunning:
 			# get next server & port
-			self.serverIndex = (self.serverIndex + 1) % len(self.servers)
-			server, port, useSsl = self.servers[self.serverIndex]
+			self.__serverIndex = (self.__serverIndex + 1) % len(self.servers)
+			server, port, useSsl = self.servers[self.__serverIndex]
 			# reset connected state
 			self.isConnected = False
 			try:
@@ -70,5 +73,6 @@ class IRCClient(object):
 					logger.flush()
 				raise
 			except Exception as err:
-				print(err, 'Reconnecting in 5 seconds.')
+				traceback.print_exc()
+				print('Reconnecting in 5 seconds.')
 				sleep(5)

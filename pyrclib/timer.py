@@ -1,10 +1,9 @@
 import time
 
-class TimerManager(object):
+class TimerManager:
 	def __init__(self):
-		super(TimerManager, self).__init__()
+		super().__init__()
 		self.__timers = []
-		self.__lastCalled = None
 	@staticmethod
 	def __now():
 		return int(time.time() * 1000)

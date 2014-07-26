@@ -2,15 +2,15 @@ import socket
 import ssl
 from select import select
 
-class SocketConnection(object):
-	def __init__(self, host, port, useSsl):
+class SocketConnection:
+	def __init__(self, host: str, port: int, useSsl: bool):
 		self.host = host
 		self.port = port
 		self.useSsl = useSsl
-		self.__sendbuf = ''
-		self.__recvbuf = ''
+		self.__sendbuf = b''
+		self.__recvbuf = b''
 		self.__socket = self._getSocket()
-	def _getSocket(self):
+	def _getSocket(self) -> socket.socket:
 		s = None
 		for af, socktype, proto, canonname, sa in socket.getaddrinfo(self.host, self.port, socket.AF_UNSPEC, socket.SOCK_STREAM):
 			try:
@@ -29,22 +29,22 @@ class SocketConnection(object):
 			break
 		return s
 	# data handling
-	def send(self, data):
+	def send(self, data: bytes) -> bool:
 		if not self.isConnected():
 			return False
 		self.__sendbuf += data
 		return True
-	def receive(self, amount = None):
+	def receive(self, amount = None) -> bytes:
 		ret = self.peek(amount)
 		self.discard(len(ret))
 		return ret
-	def peek(self, amount = None):
+	def peek(self, amount = None) -> bytes:
 		return self.__recvbuf if amount is None else self.__recvbuf[:amount]
 	def discard(self, amount):
 		if amount:
 			self.__recvbuf = self.__recvbuf[amount:]
 	# connection handling
-	def isConnected(self):
+	def isConnected(self) -> bool:
 		return self.__socket is not None
 	def disconnect(self):
 		if self.__socket is not None:
@@ -56,7 +56,7 @@ class SocketConnection(object):
 			return
 		# send & receive socket data
 		sock = self.__socket
-		sockList = [sock]
+		sockList = sock,
 		readable, writable, error = select(sockList, sockList, [], 5)
 		if sock in readable:
 			chunk = sock.recv(4096)
